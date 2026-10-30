@@ -104,7 +104,6 @@
       <div class="side-bottom">
         <div class="repo-mini" id="repoMini">GitHub 연결 안 됨</div>
         <button class="side-action" id="connectBtn">⚙ GitHub 연결 설정</button>
-        <button class="side-action" id="disconnectBtn">⏻ GitHub 연결 해제</button>
         <button class="side-action" id="reloadBtn">↺ 삭제한 이미지 불러오기</button>
         <button class="side-action" id="metaRemoverBtn">✦ EXIF 제거</button>
       </div>
@@ -205,7 +204,7 @@
   const els = {
     charList: $('#charList'), content: $('#content'), pageTitle: $('#pageTitle'), pageSub: $('#pageSub'),
     topUploadBtn: $('#topUploadBtn'), renameCharBtn: $('#renameCharBtn'), deleteCharBtn: $('#deleteCharBtn'), fileInput: $('#fileInput'), addCharBtn: $('#addCharBtn'), connectBtn: $('#connectBtn'),
-    disconnectBtn: $('#disconnectBtn'), reloadBtn: $('#reloadBtn'), metaRemoverBtn: $('#metaRemoverBtn'), repoMini: $('#repoMini'), connectDialog: $('#connectDialog'), tokenInput: $('#tokenInput'),
+    reloadBtn: $('#reloadBtn'), metaRemoverBtn: $('#metaRemoverBtn'), repoMini: $('#repoMini'), connectDialog: $('#connectDialog'), tokenInput: $('#tokenInput'),
     repoSelectWrap: $('#repoSelectWrap'), repoSelect: $('#repoSelect'), rememberToken: $('#rememberToken'),
     connectStatus: $('#connectStatus'), testConnectBtn: $('#testConnectBtn'), toggleTokenBtn: $('#toggleTokenBtn'),
     charDialog: $('#charDialog'), charForm: $('#charForm'), charNameInput: $('#charNameInput'),
@@ -245,16 +244,6 @@
     if(config.rememberToken && config.token){ sessionStorage.setItem(SESSION_TOKEN_KEY, config.token); }
     else { sessionStorage.removeItem(SESSION_TOKEN_KEY); }
   }
-  function clearConnection(){
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    localStorage.removeItem(CONFIG_KEY);
-    config={owner:'',repo:'',branch:'main',token:'',rememberToken:false};
-    libraryFileSha=null;
-    remoteLibraryWritable=true;
-    library=emptyLibrary();
-    activeCharId=null;
-    render();
-  }
   function repoKey(){ return config.owner && config.repo ? `${LIB_PREFIX}${config.owner}/${config.repo}` : `${LIB_PREFIX}unbound`; }
   function emptyLibrary(){ return { characters:[], activeCharId:null }; }
   function normalizeLibrary(obj){
@@ -279,7 +268,11 @@
       characters: library.characters.map(c => ({
         id:c.id,
         name:c.name,
-        images:c.images.map(img => ({id:img.id,path:img.path})).filter(img=>img.path)
+        images:c.images.map(img => {
+          if(img.path) return {id:img.id,path:img.path};
+          if(img.url) return {id:img.id,url:img.url}; // 아주 오래된 라이브러리 복구 호환
+          return null;
+        }).filter(Boolean)
       })),
       activeCharId
     };
@@ -419,7 +412,8 @@
     setTimeout(()=>t.remove(), 3200);
   }
 
-  function isConnected(){ return !!(config.owner && config.repo && config.branch && config.token); }
+  function hasRepoIdentity(){ return !!(config.owner && config.repo && config.branch); }
+  function isConnected(){ return !!(hasRepoIdentity() && config.token); }
   function publicUrl(img){
     if(img?.path && config.owner && config.repo && config.branch){
       return `https://raw.githubusercontent.com/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/${encodeURIComponent(config.branch)}/${encodePath(img.path)}`;
@@ -445,7 +439,7 @@
         <span class="char-name">${esc(c.name)}</span><span class="char-count">${c.images.length}</span>
       </button>`).join('') : `<div style="color:#6f7682;font-size:12px;padding:10px 8px;line-height:1.6">아직 캐릭터가 없습니다.</div>`;
     els.charList.querySelectorAll('[data-char]').forEach(btn=>btn.addEventListener('click',()=>{activeCharId=btn.dataset.char; saveLocalCache(); render();}));
-    els.repoMini.innerHTML = isConnected() ? `<b>${esc(config.owner)}/${esc(config.repo)}</b><br>${esc(config.branch)} · assets/ + library.json` : 'GitHub 연결 안 됨';
+    els.repoMini.innerHTML = hasRepoIdentity() ? `<b>${esc(config.owner)}/${esc(config.repo)}</b><br>${esc(config.branch)} · assets/ + library.json` : 'GitHub 연결 안 됨';
   }
 
   function renderEmpty(){
@@ -582,7 +576,8 @@
         els.busySub.textContent=`${done+1} / ${files.length} · ${file.name}`;
         const ext=extensionFor(file);
         const assetId=uid().replaceAll('-','');
-        const path=`assets/${assetId.slice(0,2)}/${assetId}.${ext}`;
+        const charFolder=String(char.id||'character').replace(/[^a-zA-Z0-9_-]/g,'_');
+        const path=`assets/${charFolder}/${assetId}.${ext}`;
         const base64=await fileToBase64(file);
         const body={ message:`asset: ${path.split('/').pop()}`, content:base64, branch:config.branch };
         const data=await gh(`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(path)}`, {method:'PUT',body:JSON.stringify(body)});
@@ -917,11 +912,6 @@
 
   els.addCharBtn.addEventListener('click',openCharDialog);
   els.connectBtn.addEventListener('click',openConnect);
-  els.disconnectBtn.addEventListener('click',()=>{
-    if(!confirm('GitHub 연결을 해제할까요?\n저장소의 이미지와 library.json은 삭제되지 않습니다.')) return;
-    clearConnection();
-    toast('GitHub 연결과 브라우저에 남아 있던 토큰을 지웠습니다.');
-  });
   els.topUploadBtn.addEventListener('click',chooseFiles);
   els.renameCharBtn.addEventListener('click',renameActiveCharacter);
   els.deleteCharBtn.addEventListener('click',deleteCharacterPermanently);
@@ -963,13 +953,14 @@
     renameActiveCharacter();
   });
 
-  // Initial render from cache, then remote sync if possible.
+  // 새로고침에서는 캐릭터 목록 캐시를 먼저 복원한다.
+  // PAT 저장 여부와 라이브러리 표시 여부는 서로 독립적이다.
   library = loadLocalCache();
   activeCharId = library.activeCharId || library.characters[0]?.id || null;
   render();
   if(isConnected()){
     syncFromRemote();
-  } else {
+  } else if(!hasRepoIdentity()){
     setTimeout(openConnect,180);
   }
 })();
