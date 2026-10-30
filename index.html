@@ -229,20 +229,17 @@
   }
   function loadConfig(){
     const saved = safeParse(localStorage.getItem(CONFIG_KEY) || '{}', {});
-    // 구버전이 localStorage에 PAT를 저장했었다면 최초 실행 시 즉시 제거한다.
-    if(saved && Object.prototype.hasOwnProperty.call(saved,'token')){
-      localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:saved.owner||'',repo:saved.repo||'',branch:saved.branch||'main',rememberToken:false}));
-      delete saved.token;
-      saved.rememberToken=false;
-    }
     const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
-    return { owner:saved.owner||'', repo:saved.repo||'', branch:saved.branch||'main', token:sessionToken, rememberToken:saved.rememberToken === true };
+    return { owner:saved.owner||'', repo:saved.repo||'', branch:saved.branch||'main', token:saved.token||sessionToken||'', rememberToken: saved.rememberToken !== false };
   }
   function saveConfig(){
-    // 저장소 식별 정보만 localStorage에 저장하고 PAT는 절대 영구 저장하지 않는다.
-    localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:config.owner,repo:config.repo,branch:config.branch,rememberToken:!!config.rememberToken}));
-    if(config.rememberToken && config.token){ sessionStorage.setItem(SESSION_TOKEN_KEY, config.token); }
-    else { sessionStorage.removeItem(SESSION_TOKEN_KEY); }
+    if(config.rememberToken){
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    } else {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:config.owner,repo:config.repo,branch:config.branch,rememberToken:false}));
+      sessionStorage.setItem(SESSION_TOKEN_KEY, config.token || '');
+    }
   }
   function repoKey(){ return config.owner && config.repo ? `${LIB_PREFIX}${config.owner}/${config.repo}` : `${LIB_PREFIX}unbound`; }
   function emptyLibrary(){ return { characters:[], activeCharId:null }; }
@@ -378,13 +375,14 @@
       const remote = await getRemoteLibrary();
       remoteLibraryWritable=true;
 
-      // 404는 "빈 라이브러리"가 아니라 "원격 정리 파일 없음"으로 취급한다.
-      // 기존 캐릭터 캐시가 있다면 절대 빈 목록으로 덮어쓰지 않는다.
-      if(libraryFileSha === null && cached.characters.length){
+      // 로컬에 캐릭터가 남아 있는데 원격 library.json이 없거나 비어 있으면
+      // 새로고침 과정에서 빈 원격 목록으로 로컬 캐시를 덮어쓰지 않는다.
+      // 이전 버전에서 원격 library.json이 빈 상태로 저장된 경우도 여기서 보호한다.
+      if(cached.characters.length && (libraryFileSha === null || remote.characters.length === 0)){
         library = cached;
         activeCharId = cached.activeCharId || cached.characters[0]?.id || null;
         render();
-        if(showToastMsg) toast('원격 library.json이 없어 기존 캐릭터 목록을 유지했습니다.', true);
+        if(showToastMsg) toast('기존 캐릭터 목록을 유지했습니다.');
         return;
       }
 
@@ -960,7 +958,7 @@
   render();
   if(isConnected()){
     syncFromRemote();
-  } else if(!hasRepoIdentity()){
+  } else {
     setTimeout(openConnect,180);
   }
 })();
