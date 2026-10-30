@@ -128,11 +128,11 @@
   <dialog id="connectDialog">
     <form method="dialog" class="modal" id="connectForm">
       <h3>GitHub 연결</h3>
-      <p class="lead">깃허브 '공개 저장소' 하나를 이미지 저장소로 사용합니다. 보안을 위해 토큰은 장기저장되지 않으며, 반드시 안전한 곳에 적어두고 사용하세요.</p>
+      <p class="lead">깃허브 '공개 저장소' 하나를 이미지 저장소로 사용합니다. 토큰은 이 브라우저에만 저장됩니다.</p>
       <div class="fields">
         <div class="field"><label>Fine-grained Personal Access Token</label><div class="token-row"><input id="tokenInput" type="password" autocomplete="off" placeholder="github_pat_..." required><button type="button" id="toggleTokenBtn">보기</button></div></div>
         <div class="field" id="repoSelectWrap" hidden><label>사용할 저장소</label><select id="repoSelect" style="width:100%;border:1px solid #dfe2e7;border-radius:10px;padding:11px 12px;background:#fff"></select></div>
-        <label class="check"><input type="checkbox" id="rememberToken"><span>이 탭을 닫기 전까지만 토큰 기억. 체크하지 않으면 새로고침마다 토큰을 다시 입력합니다.</span></label>
+        <label class="check"><input type="checkbox" id="rememberToken"><span>이 탭을 닫기 전까지만 토큰 기억. 체크하지 않으면 새로고침 시 토큰을 다시 입력합니다.</span></label>
         <div class="note">GitHub 토큰과 이미지는 개발자 서버로 전송되지 않으며, 브라우저에서 GitHub API로 직접 연결됩니다. 토큰은 <b>웹앱 저장소와 분리된 이미지 저장용 Public 저장소 1개</b>에만 접근하도록 만들고, <b>Contents: Read and write</b> 권한만 주세요. 토큰 권한 및 연결은 깃허브토큰.jpg를 참고하세요.</div>
       </div>
       <div class="status" id="connectStatus"></div>
@@ -377,21 +377,36 @@
 
   async function syncFromRemote(showToastMsg=false){
     if(!isConnected()) return;
+    // 새로고침 직후에는 이미 화면에 올린 로컬 캐시를 보호한다.
+    // 원격 library.json이 실제로 존재하고 정상 파싱된 경우에만 캐시를 교체한다.
+    const cached = loadLocalCache();
     showBusy('라이브러리 불러오는 중', '저장소의 library.json을 읽고 있습니다.');
     try{
       const remote = await getRemoteLibrary();
       remoteLibraryWritable=true;
+
+      // 404는 "빈 라이브러리"가 아니라 "원격 정리 파일 없음"으로 취급한다.
+      // 기존 캐릭터 캐시가 있다면 절대 빈 목록으로 덮어쓰지 않는다.
+      if(libraryFileSha === null && cached.characters.length){
+        library = cached;
+        activeCharId = cached.activeCharId || cached.characters[0]?.id || null;
+        render();
+        if(showToastMsg) toast('원격 library.json이 없어 기존 캐릭터 목록을 유지했습니다.', true);
+        return;
+      }
+
       library = remote;
       activeCharId = remote.activeCharId || remote.characters[0]?.id || null;
       saveLocalCache();
       render();
       if(showToastMsg) toast('저장소에서 라이브러리를 다시 불러왔습니다.');
     }catch(e){
-      const cached = loadLocalCache();
+      // 네트워크/API/파싱 실패 시에도 기존 로컬 목록을 그대로 유지한다.
       library = cached;
       activeCharId = cached.activeCharId || cached.characters[0]?.id || null;
       render();
-      toast(`저장소 불러오기 실패: ${e.message || '오류'}`, true);
+      if(showToastMsg) toast(`저장소 불러오기 실패 · 기존 목록 유지: ${e.message || '오류'}`, true);
+      else console.warn('원격 라이브러리 동기화 실패, 로컬 캐시 유지:', e);
     }finally{
       hideBusy();
     }
