@@ -77,6 +77,7 @@
     dialog::backdrop{background:rgba(10,12,16,.58);backdrop-filter:blur(4px)}
     .modal{padding:24px}.modal h3{font-size:21px;margin:0 0 7px}.modal .lead{margin:0 0 20px;color:var(--muted);font-size:13px;line-height:1.55}
     .fields{display:grid;gap:13px}.field label{display:block;font-size:12px;font-weight:750;margin:0 0 6px;color:#515761}.field input{width:100%;border:1px solid #dfe2e7;border-radius:10px;padding:11px 12px;outline:none;background:#fff}.field input:focus{border-color:#8ab4ff;box-shadow:0 0 0 3px rgba(31,111,235,.10)}
+    .field textarea{width:100%;min-height:190px;resize:vertical;border:1px solid #dfe2e7;border-radius:10px;padding:11px 12px;outline:none;background:#fff;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.field textarea:focus{border-color:#8ab4ff;box-shadow:0 0 0 3px rgba(31,111,235,.10)}
     .token-row{display:grid;grid-template-columns:1fr auto;gap:8px}.token-row button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 12px}
     .check{display:flex;gap:9px;align-items:flex-start;margin-top:2px;font-size:12px;color:#666d78;line-height:1.5}.check input{margin-top:2px}
     .note{background:#f7f8fa;border:1px solid var(--line);border-radius:12px;padding:12px 13px;color:#646b76;font-size:12px;line-height:1.55}
@@ -103,6 +104,7 @@
       <div class="side-bottom">
         <div class="repo-mini" id="repoMini">GitHub 연결 안 됨</div>
         <button class="side-action" id="connectBtn">⚙ GitHub 연결 설정</button>
+        <button class="side-action" id="disconnectBtn">⏻ GitHub 연결 해제</button>
         <button class="side-action" id="reloadBtn">↺ 삭제한 이미지 불러오기</button>
         <button class="side-action" id="metaRemoverBtn">✦ EXIF 제거</button>
       </div>
@@ -126,12 +128,12 @@
   <dialog id="connectDialog">
     <form method="dialog" class="modal" id="connectForm">
       <h3>GitHub 연결</h3>
-      <p class="lead">깃허브 '공개 저장소' 하나를 이미지 저장소로 사용합니다. 토큰은 이 브라우저에만 저장됩니다.</p>
+      <p class="lead">깃허브 '공개 저장소' 하나를 이미지 저장소로 사용합니다. 보안을 위해 토큰은 장기저장되지 않으며, 반드시 안전한 곳에 적어두고 사용하세요.</p>
       <div class="fields">
         <div class="field"><label>Fine-grained Personal Access Token</label><div class="token-row"><input id="tokenInput" type="password" autocomplete="off" placeholder="github_pat_..." required><button type="button" id="toggleTokenBtn">보기</button></div></div>
         <div class="field" id="repoSelectWrap" hidden><label>사용할 저장소</label><select id="repoSelect" style="width:100%;border:1px solid #dfe2e7;border-radius:10px;padding:11px 12px;background:#fff"></select></div>
-        <label class="check"><input type="checkbox" id="rememberToken" checked><span>이 기기에 연결정보 저장. 공용 PC에서는 끄는 것을 권장합니다.</span></label>
-        <div class="note">GitHub 토큰과 이미지는 개발자 서버로 전송되지 않으며, 브라우저에서 GitHub API로 직접 연결됩니다. 토큰은 이미지 저장용 <b>Public 저장소</b>에만 접근하도록 만들고, <b>Contents: Read and write</b> 권한을 주세요. 토큰 권한 및 연결은 깃허브토큰.jpg를 참고하세요.</div>
+        <label class="check"><input type="checkbox" id="rememberToken"><span>이 탭을 닫기 전까지만 토큰 기억. 체크하지 않으면 새로고침마다 토큰을 다시 입력합니다.</span></label>
+        <div class="note">GitHub 토큰과 이미지는 개발자 서버로 전송되지 않으며, 브라우저에서 GitHub API로 직접 연결됩니다. 토큰은 <b>웹앱 저장소와 분리된 이미지 저장용 Public 저장소 1개</b>에만 접근하도록 만들고, <b>Contents: Read and write</b> 권한만 주세요. 토큰 권한 및 연결은 깃허브토큰.jpg를 참고하세요.</div>
       </div>
       <div class="status" id="connectStatus"></div>
       <div class="modal-actions"><button class="ghost" value="cancel">취소</button><button class="primary" type="button" id="testConnectBtn">연결 확인 · 저장</button></div>
@@ -160,12 +162,27 @@
       </div>
       <div class="meta-toolbar">
         <button class="ghost" type="button" id="metaSelectBtn">이미지 선택</button>
+        <button class="ghost" type="button" id="metaUrlBtn">URL에서 불러오기</button>
         <button class="ghost" type="button" id="metaAddAllBtn" disabled>모두 현재 캐릭터에 추가</button>
         <button class="ghost" type="button" id="metaClearBtn">결과 비우기</button>
         <span class="status" id="metaStatus" style="margin:8px 0 0"></span>
       </div>
       <div class="meta-results" id="metaResults"><div style="color:#8a909a;font-size:12px;padding:8px 2px">처리 결과가 여기에 표시됩니다.</div></div>
       <div class="modal-actions"><button class="ghost" type="button" id="metaCloseBtn">닫기</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="urlImportDialog">
+    <div class="modal">
+      <h3>이미지 URL 불러오기</h3>
+      <p class="lead">이미지 주소를 한 줄에 하나씩 입력하세요. pbs.twimg.com 주소는 wsrv.nl을 통해 임시로 불러온 뒤 기존 EXIF 제거 과정으로 넘깁니다.</p>
+      <div class="field">
+        <label>이미지 URL</label>
+        <textarea id="urlImportInput" spellcheck="false" autocomplete="off" placeholder="https://pbs.twimg.com/media/...&#10;https://example.com/image.webp"></textarea>
+      </div>
+      <div class="note" style="margin-top:12px">변환된 wsrv.nl 주소는 저장하지 않습니다. 이미지를 브라우저로 가져오는 데만 사용하며, 최종 결과는 기존과 동일하게 PNG로 재인코딩됩니다. 일반 외부 URL은 원본 서버의 CORS 정책에 따라 불러오지 못할 수 있습니다.</div>
+      <div class="status" id="urlImportStatus"></div>
+      <div class="modal-actions"><button class="ghost" type="button" id="urlImportCancelBtn">취소</button><button class="primary" type="button" id="urlImportRunBtn">불러오기</button></div>
     </div>
   </dialog>
 
@@ -181,17 +198,20 @@
   const SESSION_TOKEN_KEY = 'charimg.sessionToken.v2';
   const LIB_PREFIX = 'charimg.librarycache.v2:';
   const LIBRARY_FILE = 'library.json';
+  const MAX_META_PIXELS = 40_000_000;
+  const MAX_META_FILE_BYTES = 25 * 1024 * 1024;
 
   const $ = (s) => document.querySelector(s);
   const els = {
     charList: $('#charList'), content: $('#content'), pageTitle: $('#pageTitle'), pageSub: $('#pageSub'),
     topUploadBtn: $('#topUploadBtn'), renameCharBtn: $('#renameCharBtn'), deleteCharBtn: $('#deleteCharBtn'), fileInput: $('#fileInput'), addCharBtn: $('#addCharBtn'), connectBtn: $('#connectBtn'),
-    reloadBtn: $('#reloadBtn'), metaRemoverBtn: $('#metaRemoverBtn'), repoMini: $('#repoMini'), connectDialog: $('#connectDialog'), tokenInput: $('#tokenInput'),
+    disconnectBtn: $('#disconnectBtn'), reloadBtn: $('#reloadBtn'), metaRemoverBtn: $('#metaRemoverBtn'), repoMini: $('#repoMini'), connectDialog: $('#connectDialog'), tokenInput: $('#tokenInput'),
     repoSelectWrap: $('#repoSelectWrap'), repoSelect: $('#repoSelect'), rememberToken: $('#rememberToken'),
     connectStatus: $('#connectStatus'), testConnectBtn: $('#testConnectBtn'), toggleTokenBtn: $('#toggleTokenBtn'),
     charDialog: $('#charDialog'), charForm: $('#charForm'), charNameInput: $('#charNameInput'),
-    metaDialog: $('#metaDialog'), metaFileInput: $('#metaFileInput'), metaDropzone: $('#metaDropzone'), metaSelectBtn: $('#metaSelectBtn'),
-    metaAddAllBtn: $('#metaAddAllBtn'), metaClearBtn: $('#metaClearBtn'), metaStatus: $('#metaStatus'), metaResults: $('#metaResults'), metaCloseBtn: $('#metaCloseBtn'), busy: $('#busy'),
+    metaDialog: $('#metaDialog'), metaFileInput: $('#metaFileInput'), metaDropzone: $('#metaDropzone'), metaSelectBtn: $('#metaSelectBtn'), metaUrlBtn: $('#metaUrlBtn'),
+    metaAddAllBtn: $('#metaAddAllBtn'), metaClearBtn: $('#metaClearBtn'), metaStatus: $('#metaStatus'), metaResults: $('#metaResults'), metaCloseBtn: $('#metaCloseBtn'),
+    urlImportDialog: $('#urlImportDialog'), urlImportInput: $('#urlImportInput'), urlImportStatus: $('#urlImportStatus'), urlImportRunBtn: $('#urlImportRunBtn'), urlImportCancelBtn: $('#urlImportCancelBtn'), busy: $('#busy'),
     busyTitle: $('#busyTitle'), busySub: $('#busySub'), toastWrap: $('#toastWrap')
   };
 
@@ -199,24 +219,41 @@
   let library = emptyLibrary();
   let activeCharId = null;
   let libraryFileSha = null;
+  let remoteLibraryWritable = true;
   const PNG_SIGNATURE = new Uint8Array([137,80,78,71,13,10,26,10]);
   const STEALTH_MAGICS = ['stealth_pngcomp','stealth_pnginfo'];
   const metaState = { ready: [], busy: false };
 
   function safeParse(text, fallback){ try{return JSON.parse(text)}catch{return fallback} }
+  function parseJsonStrict(text, label='JSON'){
+    try{return JSON.parse(text)}catch(e){throw new Error(`${label} 파싱 실패: ${e.message}`);}
+  }
   function loadConfig(){
     const saved = safeParse(localStorage.getItem(CONFIG_KEY) || '{}', {});
+    // 구버전이 localStorage에 PAT를 저장했었다면 최초 실행 시 즉시 제거한다.
+    if(saved && Object.prototype.hasOwnProperty.call(saved,'token')){
+      localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:saved.owner||'',repo:saved.repo||'',branch:saved.branch||'main',rememberToken:false}));
+      delete saved.token;
+      saved.rememberToken=false;
+    }
     const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
-    return { owner:saved.owner||'', repo:saved.repo||'', branch:saved.branch||'main', token:saved.token||sessionToken||'', rememberToken: saved.rememberToken !== false };
+    return { owner:saved.owner||'', repo:saved.repo||'', branch:saved.branch||'main', token:sessionToken, rememberToken:saved.rememberToken === true };
   }
   function saveConfig(){
-    if(config.rememberToken){
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    } else {
-      localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:config.owner,repo:config.repo,branch:config.branch,rememberToken:false}));
-      sessionStorage.setItem(SESSION_TOKEN_KEY, config.token || '');
-    }
+    // 저장소 식별 정보만 localStorage에 저장하고 PAT는 절대 영구 저장하지 않는다.
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({owner:config.owner,repo:config.repo,branch:config.branch,rememberToken:!!config.rememberToken}));
+    if(config.rememberToken && config.token){ sessionStorage.setItem(SESSION_TOKEN_KEY, config.token); }
+    else { sessionStorage.removeItem(SESSION_TOKEN_KEY); }
+  }
+  function clearConnection(){
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(CONFIG_KEY);
+    config={owner:'',repo:'',branch:'main',token:'',rememberToken:false};
+    libraryFileSha=null;
+    remoteLibraryWritable=true;
+    library=emptyLibrary();
+    activeCharId=null;
+    render();
   }
   function repoKey(){ return config.owner && config.repo ? `${LIB_PREFIX}${config.owner}/${config.repo}` : `${LIB_PREFIX}unbound`; }
   function emptyLibrary(){ return { characters:[], activeCharId:null }; }
@@ -229,13 +266,22 @@
         name: typeof c?.name === 'string' ? c.name : 'Unnamed',
         images: Array.isArray(c?.images) ? c.images.filter(Boolean).map(img => ({
           id: typeof img?.id === 'string' ? img.id : uid('img_'),
-          url: typeof img?.url === 'string' ? img.url : '',
-          commit: typeof img?.commit === 'string' ? img.commit : '',
           path: typeof img?.path === 'string' ? img.path : '',
-          createdAt: typeof img?.createdAt === 'string' ? img.createdAt : new Date().toISOString()
-        })).filter(img => img.url || img.path) : []
+          // legacy library.json 호환용. 새 저장 시에는 url/commit/createdAt을 쓰지 않는다.
+          url: typeof img?.url === 'string' ? img.url : ''
+        })).filter(img => img.path || img.url) : []
       })),
       activeCharId: typeof lib.activeCharId === 'string' ? lib.activeCharId : null
+    };
+  }
+  function compactLibraryForSave(){
+    return {
+      characters: library.characters.map(c => ({
+        id:c.id,
+        name:c.name,
+        images:c.images.map(img => ({id:img.id,path:img.path})).filter(img=>img.path)
+      })),
+      activeCharId
     };
   }
   function loadLocalCache(){ return normalizeLibrary(safeParse(localStorage.getItem(repoKey()) || '', emptyLibrary())); }
@@ -246,8 +292,17 @@
   function uid(prefix=''){ return prefix + (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`); }
   function esc(s=''){ return String(s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function encodePath(path){ return path.split('/').map(encodeURIComponent).join('/'); }
-  function utf8ToBase64(str){ return btoa(String.fromCharCode(...new TextEncoder().encode(str))); }
-  function base64ToUtf8(str){ return new TextDecoder().decode(Uint8Array.from(atob(str), c => c.charCodeAt(0))); }
+  function bytesToBase64(bytes){
+    const CHUNK=0x8000; let binary='';
+    for(let i=0;i<bytes.length;i+=CHUNK){ binary += String.fromCharCode(...bytes.subarray(i,i+CHUNK)); }
+    return btoa(binary);
+  }
+  function utf8ToBase64(str){ return bytesToBase64(new TextEncoder().encode(str)); }
+  function base64ToUtf8(str){
+    const binary=atob(str); const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
 
   function headers(){
     return {
@@ -270,29 +325,54 @@
     return data;
   }
 
+  async function ghText(path, accept='application/vnd.github.raw+json'){
+    const res = await fetch(`${API}${path}`, {headers:{...headers(),'Accept':accept}});
+    const text = await res.text();
+    if(!res.ok){
+      const parsed=safeParse(text,null);
+      const msg=parsed?.message || `${res.status} ${res.statusText}`;
+      const err=new Error(msg); err.status=res.status; err.data=parsed||text; throw err;
+    }
+    return text;
+  }
+
   async function getRemoteLibrary(){
     try{
-      const data = await gh(`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(LIBRARY_FILE)}?ref=${encodeURIComponent(config.branch)}`);
-      libraryFileSha = data.sha || null;
-      const json = data.content ? base64ToUtf8(String(data.content).replace(/\n/g,'')) : '{}';
-      return normalizeLibrary(safeParse(json, emptyLibrary()));
+      const endpoint=`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(LIBRARY_FILE)}?ref=${encodeURIComponent(config.branch)}`;
+      const meta=await gh(endpoint,{headers:{'Accept':'application/vnd.github.object+json'}});
+      libraryFileSha=meta.sha||null;
+      const raw=await ghText(endpoint,'application/vnd.github.raw+json');
+      if(!raw.trim() && Number(meta.size||0)>0) throw new Error('library.json 내용을 읽지 못했습니다.');
+      const parsed=parseJsonStrict(raw||'{}','library.json');
+      remoteLibraryWritable=true;
+      return normalizeLibrary(parsed);
     }catch(e){
-      if(e.status === 404){ libraryFileSha = null; return emptyLibrary(); }
+      if(e.status===404){ libraryFileSha=null; remoteLibraryWritable=true; return emptyLibrary(); }
+      remoteLibraryWritable=false;
       throw e;
     }
   }
 
   async function saveRemoteLibrary(message='library: update'){
-    const body = {
+    if(!remoteLibraryWritable) throw new Error('library.json을 안전하게 읽지 못한 상태라 저장을 중단했습니다. 저장소에서 다시 불러오기를 먼저 실행해주세요.');
+    const body={
       message,
-      content: utf8ToBase64(JSON.stringify({...library, activeCharId}, null, 2)),
-      branch: config.branch
+      content:utf8ToBase64(JSON.stringify(compactLibraryForSave(),null,2)),
+      branch:config.branch
     };
-    if(libraryFileSha) body.sha = libraryFileSha;
-    const data = await gh(`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(LIBRARY_FILE)}`, { method:'PUT', body: JSON.stringify(body) });
-    libraryFileSha = data?.content?.sha || libraryFileSha;
-    saveLocalCache();
-    return data;
+    if(libraryFileSha) body.sha=libraryFileSha;
+    try{
+      const data=await gh(`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(LIBRARY_FILE)}`,{method:'PUT',body:JSON.stringify(body)});
+      libraryFileSha=data?.content?.sha||libraryFileSha;
+      saveLocalCache();
+      return data;
+    }catch(e){
+      if(e.status===409){
+        remoteLibraryWritable=false;
+        throw new Error('다른 탭이나 기기에서 library.json이 먼저 변경되었습니다. 저장소에서 다시 불러온 뒤 다시 시도해주세요.');
+      }
+      throw e;
+    }
   }
 
   async function syncFromRemote(showToastMsg=false){
@@ -300,6 +380,7 @@
     showBusy('라이브러리 불러오는 중', '저장소의 library.json을 읽고 있습니다.');
     try{
       const remote = await getRemoteLibrary();
+      remoteLibraryWritable=true;
       library = remote;
       activeCharId = remote.activeCharId || remote.characters[0]?.id || null;
       saveLocalCache();
@@ -383,7 +464,7 @@
 
   function openConnect(){
     els.tokenInput.value=config.token||'';
-    els.rememberToken.checked=config.rememberToken!==false;
+    els.rememberToken.checked=config.rememberToken===true;
     els.repoSelectWrap.hidden=true;
     els.repoSelect.innerHTML='';
     els.testConnectBtn.textContent='토큰 확인 · 연결';
@@ -405,7 +486,19 @@
     return repos.filter(r => !r.private && (!r.permissions || r.permissions.push));
   }
 
+  function isCurrentPagesRepository(repo){
+    const host=location.hostname.toLowerCase();
+    if(!host.endsWith('.github.io')) return false;
+    const owner=host.slice(0,-'.github.io'.length);
+    const firstPath=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
+    return owner && firstPath && owner.toLowerCase()===(repo.owner?.login||'').toLowerCase() && firstPath.toLowerCase()===String(repo.name||'').toLowerCase();
+  }
+
   async function finishRepositoryConnection(repo){
+    if(isCurrentPagesRepository(repo)){
+      const ok=confirm('현재 웹앱이 배포된 저장소와 이미지 저장소가 같습니다.\n\nPAT가 탈취되면 웹앱 코드까지 수정될 수 있으므로 별도의 이미지 전용 저장소를 권장합니다. 그래도 이 저장소를 사용할까요?');
+      if(!ok) throw new Error('별도의 이미지 전용 저장소를 선택해주세요.');
+    }
     config.owner=repo.owner?.login || String(repo.full_name||'').split('/')[0];
     config.repo=repo.name;
     config.branch=repo.default_branch || 'main';
@@ -473,14 +566,15 @@
       try{
         els.busySub.textContent=`${done+1} / ${files.length} · ${file.name}`;
         const ext=extensionFor(file);
-        const path=`assets/${uid().replaceAll('-','')}.${ext}`;
+        const assetId=uid().replaceAll('-','');
+        const path=`assets/${assetId.slice(0,2)}/${assetId}.${ext}`;
         const base64=await fileToBase64(file);
         const body={ message:`asset: ${path.split('/').pop()}`, content:base64, branch:config.branch };
         const data=await gh(`/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encodePath(path)}`, {method:'PUT',body:JSON.stringify(body)});
         const sha=data?.commit?.sha;
         if(!sha) throw new Error('커밋 SHA를 받지 못했습니다.');
         const raw=`https://raw.githubusercontent.com/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/${encodeURIComponent(config.branch)}/${encodePath(path)}`;
-        added.push({id:uid('img_'),url:raw,commit:sha,path,createdAt:new Date().toISOString()});
+        added.push({id:uid('img_'),path,url:raw});
         done++;
       }catch(e){ failed++; console.error(e); toast(`${file.name}: ${e.message||'업로드 실패'}`,true); }
     }
@@ -494,12 +588,19 @@
         await saveRemoteLibrary(`library: add ${added.length} image reference(s)`);
         render();
       }catch(e){
+        // library.json 기록에 실패했으면 방금 올린 고아 이미지들을 가능한 범위에서 되돌린다.
+        let rollbackFailed=0;
+        for(const item of added){
+          try{ await deleteRepoFile(item.path, `rollback: ${item.path.split('/').pop()}`); }
+          catch{ rollbackFailed++; }
+        }
         library = normalizeLibrary(safeParse(backup, emptyLibrary()));
         activeCharId = library.activeCharId || activeCharId || library.characters[0]?.id || null;
         saveLocalCache();
         render();
         hideBusy();
-        toast(`이미지는 업로드됐지만 library.json 저장에 실패했습니다: ${e.message || '오류'}`, true);
+        const suffix=rollbackFailed?` · 롤백 실패 ${rollbackFailed}개`:' · 업로드 파일은 롤백했습니다.';
+        toast(`library.json 저장 실패: ${e.message || '오류'}${suffix}`, true);
         return;
       }
     }
@@ -557,6 +658,7 @@
       width=img.naturalWidth;height=img.naturalHeight;drawSource=img;cleanup=()=>URL.revokeObjectURL(url);
     }
     if(!width||!height){cleanup();throw new Error('이미지 크기를 읽지 못했습니다.');}
+    if(width*height>MAX_META_PIXELS){cleanup();throw new Error(`이미지 해상도가 너무 큽니다. 최대 ${Math.floor(MAX_META_PIXELS/1_000_000)}MP까지 처리합니다.`);}
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const context=canvas.getContext('2d',{willReadFrequently:true});
     context.clearRect(0,0,width,height);context.drawImage(drawSource,0,0,width,height);cleanup();
@@ -578,6 +680,67 @@
     if(!metaState.ready.length){els.metaResults.innerHTML='<div style="color:#8a909a;font-size:12px;padding:8px 2px">처리 결과가 여기에 표시됩니다.</div>';return;}
     els.metaResults.innerHTML=metaState.ready.map(item=>`<article class="meta-card"><img src="${esc(item.url)}" alt=""><div class="meta-info"><b>${esc(item.outputName)}</b><br>${item.wasPng?(item.originalReport?.hasMetadata?'PNG 메타/스텔스 감지 → 제거 완료':'PNG 검사 완료 → 재인코딩 완료'):`${esc(item.sourceLabel)} → PNG 변환 · 메타 제거 완료`}</div><div class="meta-actions"><button type="button" data-meta-download="${item.id}">다운로드</button><button type="button" data-meta-add="${item.id}" ${(!char||!isConnected())?'disabled':''}>현재 캐릭터에 추가</button></div></article>`).join('');
   }
+  function normalizeImageUrl(input){
+    const url=new URL(String(input||'').trim());
+    if(!['http:','https:'].includes(url.protocol)) throw new Error('HTTP 또는 HTTPS 주소만 사용할 수 있습니다.');
+    if(url.hostname.toLowerCase()==='pbs.twimg.com') return `https://wsrv.nl/?url=${encodeURIComponent(url.href)}`;
+    return url.href;
+  }
+  function extensionFromMime(type=''){
+    const mime=String(type).split(';')[0].trim().toLowerCase();
+    return {'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/avif':'avif','image/bmp':'bmp','image/svg+xml':'svg'}[mime]||'';
+  }
+  function fileNameFromUrl(input,index,type=''){
+    const url=new URL(input);
+    let base='';
+    try{base=decodeURIComponent(url.pathname.split('/').filter(Boolean).pop()||'');}catch{base=url.pathname.split('/').filter(Boolean).pop()||'';}
+    base=base.replace(/[\\/:*?"<>|]+/g,'_').replace(/^\.+|\.+$/g,'').slice(0,100) || `url-image-${index+1}`;
+    if(!/\.[a-z0-9]{2,5}$/i.test(base)){
+      const queryExt=(url.searchParams.get('format')||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      const ext=(queryExt==='jpeg'?'jpg':queryExt)||extensionFromMime(type);
+      if(ext) base+=`.${ext}`;
+    }
+    return base;
+  }
+  async function fetchImageUrl(originalUrl,index){
+    const normalized=normalizeImageUrl(originalUrl);
+    const response=await fetch(normalized,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer'});
+    if(!response.ok) throw new Error(`이미지 요청 실패 (${response.status})`);
+    const declaredLength=Number(response.headers.get('content-length')||0);
+    if(declaredLength>MAX_META_FILE_BYTES) throw new Error('이미지가 25MB를 초과합니다.');
+    const blob=await response.blob();
+    if(blob.size>MAX_META_FILE_BYTES) throw new Error('이미지가 25MB를 초과합니다.');
+    const type=(blob.type||response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+    if(type && !type.startsWith('image/')) throw new Error(`이미지 응답이 아닙니다 (${type})`);
+    const name=fileNameFromUrl(originalUrl,index,type);
+    return new File([blob],name,{type:type||'application/octet-stream'});
+  }
+  async function importImageUrls(){
+    const raw=els.urlImportInput.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+    const urls=[...new Set(raw)];
+    if(!urls.length){els.urlImportStatus.textContent='이미지 URL을 입력해주세요.';els.urlImportStatus.className='status err';return;}
+    if(urls.length>50){els.urlImportStatus.textContent='한 번에 최대 50개 URL까지 불러올 수 있습니다.';els.urlImportStatus.className='status err';return;}
+    els.urlImportRunBtn.disabled=true;els.urlImportCancelBtn.disabled=true;els.urlImportStatus.className='status';
+    const files=[];let failed=0;
+    for(let i=0;i<urls.length;i++){
+      try{
+        els.urlImportStatus.textContent=`${i+1} / ${urls.length} · 이미지 불러오는 중`;
+        files.push(await fetchImageUrl(urls[i],i));
+      }catch(e){
+        failed++;
+        let host='URL';try{host=new URL(urls[i]).hostname||'URL';}catch{}
+        toast(`${host}: ${e.message||'불러오기 실패'}`,true);
+      }
+      await new Promise(requestAnimationFrame);
+    }
+    els.urlImportRunBtn.disabled=false;els.urlImportCancelBtn.disabled=false;
+    if(!files.length){els.urlImportStatus.textContent=`0 / ${urls.length}개 불러오기 성공`;els.urlImportStatus.className='status err';return;}
+    els.urlImportStatus.textContent=`${files.length}개 불러옴${failed?` · ${failed}개 실패`:''}`;els.urlImportStatus.className='status ok';
+    els.urlImportDialog.close();
+    els.urlImportInput.value='';
+    await processMetaFiles(files);
+  }
+
   async function processMetaFiles(files){
     const images=[...files].filter(f=>f.type.startsWith('image/')||/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(f.name||''));
     if(!images.length){els.metaStatus.textContent='처리할 이미지 파일이 없습니다.';return;}
@@ -586,6 +749,7 @@
     for(let i=0;i<images.length;i++){
       const file=images[i];
       try{
+        if(file.size>MAX_META_FILE_BYTES) throw new Error('EXIF 제거 도구에서는 파일당 25MB 이하만 처리합니다.');
         els.metaStatus.textContent=`${i+1} / ${images.length} · ${file.name} PNG 변환·검증 중`;
         const wasPng=await isActuallyPng(file);
         const originalReport=wasPng?await inspectBlob(file):null;
@@ -722,6 +886,10 @@
 
   els.metaRemoverBtn.addEventListener('click',openMetaRemover);
   els.metaSelectBtn.addEventListener('click',()=>els.metaFileInput.click());
+  els.metaUrlBtn.addEventListener('click',()=>{els.urlImportStatus.textContent='';els.urlImportStatus.className='status';els.urlImportDialog.showModal();setTimeout(()=>els.urlImportInput.focus(),30);});
+  els.urlImportRunBtn.addEventListener('click',importImageUrls);
+  els.urlImportCancelBtn.addEventListener('click',()=>els.urlImportDialog.close());
+  els.urlImportInput.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();importImageUrls();}});
   els.metaCloseBtn.addEventListener('click',()=>els.metaDialog.close());
   els.metaFileInput.addEventListener('change',()=>{const files=[...els.metaFileInput.files];els.metaFileInput.value='';processMetaFiles(files);});
   ['dragenter','dragover'].forEach(type=>els.metaDropzone.addEventListener(type,e=>{e.preventDefault();els.metaDropzone.classList.add('drag');}));
@@ -734,6 +902,11 @@
 
   els.addCharBtn.addEventListener('click',openCharDialog);
   els.connectBtn.addEventListener('click',openConnect);
+  els.disconnectBtn.addEventListener('click',()=>{
+    if(!confirm('GitHub 연결을 해제할까요?\n저장소의 이미지와 library.json은 삭제되지 않습니다.')) return;
+    clearConnection();
+    toast('GitHub 연결과 브라우저에 남아 있던 토큰을 지웠습니다.');
+  });
   els.topUploadBtn.addEventListener('click',chooseFiles);
   els.renameCharBtn.addEventListener('click',renameActiveCharacter);
   els.deleteCharBtn.addEventListener('click',deleteCharacterPermanently);
